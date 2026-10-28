@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Handle, Position, type NodeProps } from '@xyflow/react';
 import { useBoardStore } from '../../../stores/useBoardStore';
 import { objectUrlFor } from '../../capture/lib/images';
+import { renderRich } from '../lib/format';
 import type { Artifact } from '../types';
 
 const TYPE_ACCENT: Record<Artifact['type'], string> = {
@@ -16,13 +17,32 @@ export default function ArtifactNode({ data, selected }: NodeProps) {
   const update = useBoardStore((s) => s.update);
   const remove = useBoardStore((s) => s.remove);
   const duplicate = useBoardStore((s) => s.duplicate);
-  const [editing, setEditing] = useState(false);
+  const [editingContext, setEditingContext] = useState(false);
   const [context, setContext] = useState(artifact.context ?? '');
   const [imgUrl, setImgUrl] = useState<string | undefined>(undefined);
+
+  const isTextCard = artifact.type === 'text' || artifact.type === 'note';
+  const [editingBody, setEditingBody] = useState(
+    isTextCard && !artifact.content,
+  );
+  const [body, setBody] = useState(artifact.content);
+  const bodyRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     setContext(artifact.context ?? '');
   }, [artifact.context]);
+
+  useEffect(() => {
+    if (!editingBody) setBody(artifact.content);
+  }, [artifact.content, editingBody]);
+
+  useEffect(() => {
+    if (editingBody) {
+      bodyRef.current?.focus();
+      const el = bodyRef.current;
+      if (el) el.setSelectionRange(el.value.length, el.value.length);
+    }
+  }, [editingBody]);
 
   useEffect(() => {
     if (artifact.type !== 'image' || !artifact.imageId) return;
@@ -38,13 +58,18 @@ export default function ArtifactNode({ data, selected }: NodeProps) {
   const accent = artifact.color ?? TYPE_ACCENT[artifact.type];
 
   const commitContext = () => {
-    setEditing(false);
+    setEditingContext(false);
     if (context !== (artifact.context ?? '')) update(artifact.id, { context });
+  };
+
+  const commitBody = () => {
+    setEditingBody(false);
+    if (body !== artifact.content) update(artifact.id, { content: body });
   };
 
   return (
     <div
-      className={`clay-card w-72 overflow-hidden ${selected ? 'clay-selected' : ''}`}
+      className={`clay-card w-80 overflow-hidden ${selected ? 'clay-selected' : ''}`}
       style={{ borderTop: `6px solid ${accent}` }}
     >
       <Handle type="target" position={Position.Top} style={{ opacity: 0 }} />
@@ -90,11 +115,43 @@ export default function ArtifactNode({ data, selected }: NodeProps) {
         {artifact.type === 'link' && (
           <p className="mt-0.5 truncate font-body text-xs text-muted">{artifact.content}</p>
         )}
-        {(artifact.type === 'text' || artifact.type === 'note') && (
-          <p className="whitespace-pre-wrap break-words font-body text-sm leading-relaxed text-body">
-            {artifact.content || 'Empty note'}
-          </p>
-        )}
+
+        {isTextCard &&
+          (editingBody ? (
+            <div>
+              <textarea
+                ref={bodyRef}
+                value={body}
+                onChange={(e) => setBody(e.target.value)}
+                onBlur={commitBody}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') {
+                    setBody(artifact.content);
+                    setEditingBody(false);
+                  }
+                  e.stopPropagation();
+                }}
+                placeholder="Type what's on your mind…"
+                rows={Math.min(12, Math.max(3, body.split('\n').length + 1))}
+                className="w-full resize-none overflow-hidden rounded-xl border-2 border-ink bg-white p-2.5 font-body text-sm leading-relaxed outline-none"
+              />
+              <div className="mt-1 font-body text-[11px] text-muted">
+                *bold* _italic_ ~strike~ `code` • - list • # heading
+              </div>
+            </div>
+          ) : (
+            <button
+              onClick={() => setEditingBody(true)}
+              className="block w-full rounded-xl px-1 py-1 text-left font-body text-sm leading-relaxed text-body hover:bg-black/[0.04]"
+            >
+              {artifact.content ? (
+                <span className="whitespace-pre-wrap break-words">{renderRich(artifact.content)}</span>
+              ) : (
+                <span className="italic text-muted">Click to type what&apos;s on your mind…</span>
+              )}
+            </button>
+          ))}
+
         {artifact.type === 'image' && (
           <div className="overflow-hidden rounded-xl border border-hairline bg-surface-soft">
             {imgUrl ? (
@@ -107,34 +164,35 @@ export default function ArtifactNode({ data, selected }: NodeProps) {
           </div>
         )}
 
-        {editing ? (
-          <textarea
-            autoFocus
-            value={context}
-            onChange={(e) => setContext(e.target.value)}
-            onBlur={commitContext}
-            onKeyDown={(e) => {
-              if (e.key === 'Escape') {
-                setContext(artifact.context ?? '');
-                setEditing(false);
-              }
-              e.stopPropagation();
-            }}
-            placeholder="Why does this matter? Add context…"
-            className="mt-2 min-h-16 w-full rounded-xl border-2 border-ink bg-white p-2 font-body text-[13px] outline-none"
-          />
-        ) : (
-          <button
-            onClick={() => setEditing(true)}
-            className="mt-2 block w-full rounded-xl bg-surface-soft px-2 py-1.5 text-left font-body text-[13px] text-body hover:bg-surface-strong"
-          >
-            {artifact.context ? (
-              <span className="whitespace-pre-wrap break-words">{artifact.context}</span>
-            ) : (
-              <span className="italic text-muted">+ Add context…</span>
-            )}
-          </button>
-        )}
+        {(!isTextCard || artifact.content) &&
+          (editingContext ? (
+            <textarea
+              autoFocus
+              value={context}
+              onChange={(e) => setContext(e.target.value)}
+              onBlur={commitContext}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') {
+                  setContext(artifact.context ?? '');
+                  setEditingContext(false);
+                }
+                e.stopPropagation();
+              }}
+              placeholder="Why does this matter? Add context…"
+              className="mt-2 min-h-16 w-full rounded-xl border-2 border-ink bg-white p-2 font-body text-[13px] outline-none"
+            />
+          ) : (
+            <button
+              onClick={() => setEditingContext(true)}
+              className="mt-2 block w-full rounded-xl bg-surface-soft px-2 py-1.5 text-left font-body text-[13px] text-body hover:bg-surface-strong"
+            >
+              {artifact.context ? (
+                <span className="whitespace-pre-wrap break-words">{artifact.context}</span>
+              ) : (
+                <span className="italic text-muted">+ Add context…</span>
+              )}
+            </button>
+          ))}
       </div>
       <Handle type="source" position={Position.Bottom} style={{ opacity: 0 }} />
     </div>

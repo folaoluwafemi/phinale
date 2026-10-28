@@ -26,6 +26,7 @@ function CanvasInner() {
   const loaded = useBoardStore((s) => s.loaded);
   const load = useBoardStore((s) => s.load);
   const move = useBoardStore((s) => s.move);
+  const add = useBoardStore((s) => s.add);
   const setViewport = useBoardStore((s) => s.setViewport);
   const { screenToFlowPosition, setViewport: setRfViewport, zoomIn, zoomOut, fitView } = useReactFlow();
 
@@ -108,6 +109,16 @@ function CanvasInner() {
     [screenToFlowPosition],
   );
 
+  const onDoubleClick = useCallback(
+    (e: React.MouseEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target && target.closest('.react-flow__node')) return;
+      const pos = screenToFlowPosition({ x: e.clientX, y: e.clientY });
+      add({ type: 'note', content: '', position: pos });
+    },
+    [add, screenToFlowPosition],
+  );
+
   const isEmpty = loaded && artifacts.length === 0;
 
   return (
@@ -121,6 +132,7 @@ function CanvasInner() {
           onEdgesChange={onEdgesChange}
           onNodeDragStop={onNodeDragStop}
           onMoveEnd={onMoveEnd}
+          onDoubleClick={onDoubleClick}
           nodeTypes={nodeTypes}
           defaultViewport={viewport}
           minZoom={0.2}

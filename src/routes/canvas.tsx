@@ -15,7 +15,15 @@ export default function CanvasRoute() {
       }
       if ((e.key === 'n' || e.key === 'N') && !typing) {
         e.preventDefault();
-        useBoardStore.getState().add({ type: 'note', content: '', position: { x: 0, y: 0 } });
+        useBoardStore
+          .getState()
+          .add({ type: 'note', content: '', position: { x: 0, y: 0 } });
+      }
+      if ((e.key === 't' || e.key === 'T') && !typing) {
+        e.preventDefault();
+        useBoardStore
+          .getState()
+          .add({ type: 'text', content: '', position: { x: 60, y: 0 } });
       }
     };
     window.addEventListener('keydown', onKey);
